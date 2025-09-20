@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - MandiuBot</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #FFF0E5; 
+            color: #4F4F4F; 
+            margin: 0; 
+            padding: 20px; 
+        }
+        h1, h2 { 
+            color: #E67E22; 
+        }
+        .grid-container { 
+            display: grid; 
+            grid-template-columns: 2fr 1fr; 
+            gap: 20px; 
+            max-width: 1400px; 
+            margin: auto; 
+        }
+        .main-content, .sidebar { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 20px; 
+        }
+        .card { 
+            background-color: #FFFFFF; 
+            border-radius: 8px; 
+            padding: 20px; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
+        }
+        .card-value { 
+            font-size: 2em; 
+            font-weight: bold; 
+        }
+        textarea, select, button, input { 
+            width: 100%; 
+            padding: 10px; 
+            margin-top: 10px; 
+            border-radius: 5px; 
+            border: 1px solid #ddd; 
+            box-sizing: border-box; 
+            font-size: 1em; 
+        }
+        button { 
+            background-color: #E67E22; 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+        }
+        button:hover { 
+            background-color: #D35400; 
+        }
+        ol { 
+            padding-left: 20px; 
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Panel de Control de MandiuBot</h1>
+    <div class="grid-container">
+        <div class="main-content">
+            <div class="card">
+                <h2>Actividad de Mensajes (por minuto)</h2>
+                <canvas id="activityChart"></canvas>
+            </div>
+            <div class="card">
+                <h2>Enviar un Mensaje</h2>
+                <form id="sendMessageForm">
+                    <select id="channelSelect" required><option value="">Selecciona un canal...</option></select>
+                    <textarea id="messageText" placeholder="Escribe tu mensaje aquí..." rows="4" required></textarea>
+                    <button type="submit">Enviar Mensaje</button>
+                </form>
+                <p id="formStatus" style="margin-top: 10px;"></p>
+            </div>
+        </div>
+        <div class="sidebar">
+            <div class="card">
+                <h2>Estadísticas</h2>
+                <p>Miembros: <span id="stats-miembros" class="card-value">...</span></p>
+                <p>Servidor: <span id="stats-servidor">...</span></p>
+                <p>Versión: <span id="stats-version">...</span></p>
+            </div>
+            <div class="card">
+                <h2>Top 5 - Niveles de XP</h2>
+                <ol id="leaderboard-xp"></ol>
+            </div>
+            <div class="card">
+                <h2>Control de Moderación</h2>
+                <form id="kickUserForm">
+                    <select id="userSelectKick" required><option value="">Selecciona un usuario a expulsar...</option></select>
+                    <input id="kickReason" placeholder="Razón de la expulsión (opcional)..." />
+                    <button type="submit">Expulsar Usuario</button>
+                </form>
+                <p id="kickStatus"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const activityChartCtx = document.getElementById('activityChart').getContext('2d');
+        const activityChart = new Chart(activityChartCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Mensajes por minuto',
+                    data: [],
+                    borderColor: '#E67E22',
+                    tension: 0.1
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true, suggestedMax: 10 } } }
+        });
+        let messageCount = 0;
+
+        // --- CONEXIÓN WEBSOCKET PARA DATOS EN VIVO ---
+        const socket = new WebSocket(`ws://${window.location.host}`);
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'newMessage') {
+                messageCount++;
+            } else if (data.type === 'memberCountUpdate') {
+                document.getElementById('stats-miembros').textContent = data.count;
+            }
+        };
+
+        // --- ACTUALIZAR LA GRÁFICA CADA MINUTO ---
+        setInterval(() => {
+            const time = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            activityChart.data.labels.push(time);
+            activityChart.data.datasets[0].data.push(messageCount);
+            
+            // Mantenemos solo los últimos 30 minutos de datos en la gráfica
+            if (activityChart.data.labels.length > 30) {
+                activityChart.data.labels.shift();
+                activityChart.data.datasets[0].data.shift();
+            }
+            activityChart.update();
+            messageCount = 0; // Reseteamos el contador para el próximo minuto
+        }, 60000); // 60000 milisegundos = 1 minuto
+
+        // --- CARGA DE DATOS INICIAL ---
+        async function loadInitialData() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+
+                document.getElementById('stats-miembros').textContent = data.totalMembers;
+                document.getElementById('stats-servidor').textContent = data.guildName;
+                document.getElementById('stats-version').textContent = 'v' + data.botVersion;
+
+                const channelSelect = document.getElementById('channelSelect');
+                channelSelect.innerHTML = '<option value="">Selecciona un canal...</option>';
+                data.textChannels.forEach(c => channelSelect.add(new Option(`#${c.name}`, c.id)));
+
+                const userSelect = document.getElementById('userSelectKick');
+                userSelect.innerHTML = '<option value="">Selecciona un usuario a expulsar...</option>';
+                data.kickableMembers.forEach(m => userSelect.add(new Option(m.name, m.id)));
+                
+                const leaderboardList = document.getElementById('leaderboard-xp');
+                leaderboardList.innerHTML = '';
+                data.leaderboard.forEach(u => {
+                    const li = document.createElement('li');
+                    li.textContent = `${u.name} - Nivel ${u.level} (XP: ${u.xp})`;
+                    leaderboardList.appendChild(li);
+                });
+            } catch (error) {
+                console.error('No se pudo cargar la data inicial del panel:', error);
+            }
+        }
+        
+        // --- MANEJO DE FORMULARIOS ---
+        document.getElementById('sendMessageForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const channelId = document.getElementById('channelSelect').value;
+            const message = document.getElementById('messageText').value;
+            const status = document.getElementById('formStatus');
+            status.textContent = 'Enviando...';
+            const res = await fetch('/api/send-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channelId, message })
+            });
+            status.textContent = res.ok ? '¡Enviado con éxito!' : 'Error al enviar.';
+            if (res.ok) document.getElementById('messageText').value = '';
+        });
+
+        document.getElementById('kickUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('userSelectKick').value;
+            const reason = document.getElementById('kickReason').value;
+            const status = document.getElementById('kickStatus');
+            status.textContent = 'Expulsando...';
+            const res = await fetch('/api/kick-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, reason: reason || 'Sin razón especificada.' })
+            });
+            status.textContent = res.ok ? '¡Usuario expulsado!' : 'Error al expulsar.';
+        });
+        
+        // Cargar los datos al abrir la página
+        loadInitialData();
+    </script>
+</body>
+</html>

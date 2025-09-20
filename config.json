@@ -1,0 +1,23 @@
+{
+  "token": "MTQxNjg0NzYzNDM0OTQyNDczMQ.GdrO_J.VbIilJPIKhJ4gwGq4k8hBw62NJ1tEB2fkGkF5E",
+  "clientId": "1416847634349424731",
+  "guildId": "1416835179833725038",
+  "botCommandsChannelId": "1416837153970716883",
+  "tvTimeChannelId": "1416837144609161287",
+  "tvTimeRoleIds": [""],
+  "reportChannelId": "1416867008594579457",
+  "suggestChannelId": "1416879646481580103",
+  "levelUpChannelId": "1416835181112852483",
+  "adminRoleId": "1416907872914378792",
+  "memberRoleId": "1416907465043349605",
+  "specialRoleIds": ["1416908559349977129", ""],
+  "musicVoiceChannelId": "1416919501408047226",
+  "gameChannelId": "1416944809410691186",
+  "spamMonitoredRoleId": "1416907465043349605",
+  "welcomeChannelId": "1417573865642790993",
+  "newMemberRoleId": "1416907465043349605",
+  "botStatusChannelId": "1417210680074961167",
+  "aiChannelId": "1417207901558411304",
+  "logChannelId": "1417546546307666121",
+  "countingChannelId": "1419000622925090966"
+}
